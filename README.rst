@@ -11,8 +11,12 @@ Test:
 
 ::
 
-- mkdir libim7
-- git clone https://github.com/alexlib/libim7.git .
-- python setup.py build
-- cd test
-- python test_SOV2_01_100.py
+$ mkdir libim7
+
+$ git clone https://github.com/alexlib/libim7.git .
+
+$ python setup.py build
+
+$ cd test
+
+$ python test_SOV2_01_100.py
