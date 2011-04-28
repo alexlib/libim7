@@ -453,7 +453,8 @@ def quiver_3d(x,y,vx,vy,vz, ax=None, sep=1):
     return ax
 
 if __name__=='__main__':
-    buf, att = readim7("./test/B00001.VC7")
+   #  buf, att = readim7("./test/B00001.VC7")
+    buf, att = readim7("./test/PTV_B00013.VC7")
     
     def myfilter(buf):
         return buf.blocks[0,:,:]!=5

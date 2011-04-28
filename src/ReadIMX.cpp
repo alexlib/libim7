@@ -39,7 +39,7 @@
 /*****************************************************************************/
 // General functions and header (image_header) of IMG/IMX/VEC files
 /*****************************************************************************/
-
+/*
 #ifdef _WIN32
 
 #	ifdef __BORLANDC__
@@ -49,6 +49,7 @@
 #	endif
 
 #endif
+ */
 
 
 typedef struct // image file header (256 Bytes)
@@ -103,12 +104,15 @@ typedef struct // image file header (256 Bytes)
 	int		    checksum;	    // 252-255: not used
 } image_header;
 
+/*
 
 #ifdef __BORLANDC__
 #	pragma option -a.
 #else
 #	pragma pack ()
 #endif
+ 
+*/
 
 
 #define VER_EXTHEADER			54
