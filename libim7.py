@@ -166,30 +166,20 @@ class Buffer(ct.Structure):
         self.y = self.scaleY(self.header.sizeY, self.vectorGrid)
         if self.scaleY.factor<0:
             self.y = self.y[::-1]
-        self.z = 0 #np.arange(self.header.sizeZ)        
+        self.z = 0 #np.arange(self.header.sizeZ)
         
     def get_blocks(self):
         " Transforms the concatenated blocks into arrays."
         h = self.header
         arr = self.get_array()       
-        if h.buffer_format>=1 and h.buffer_format<=5:
+        if h.buffer_format==Formats['FormatsIMAGE']:
+            self.blocks = arr.reshape((h.sizeZ*h.sizeF, h.sizeY, h.sizeX))
+        elif h.buffer_format>=1 and h.buffer_format<=5:
             nblocks = (9, 2, 10, 3, 14)
             nblocks = nblocks[h.buffer_format-1]
             self.blocks = arr.reshape((nblocks, h.sizeY, h.sizeX))
-        else: # h.buffer_format==Formats['FormatsIMAGE']:
-            self.blocks = arr.reshape((h.sizeZ*h.sizeF, h.sizeY, h.sizeX))
-        #else:
-        #    raise TypeError(u"Can't get blocks from this buffer format.")
-    
-    def get_frame(self, idx=0):
-        """
-        Extract the specified frame (index starting from 0).
-        """
-        if idx<self.nf:
-            b = self.blocks
-            return b[idx,...]
         else:
-            raise ValueError('Buffer has no more than %d frames.' % self.nf)
+            raise TypeError(u"Can't get blocks from this buffer format.")
     
     def get_components(self):
         """
@@ -212,12 +202,10 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[3,:,:][choice==2]
             vx[choice==3] = b[5,:,:][choice==3]
             vx[choice==4] = b[7,:,:][choice==4]
-            vx[choice==5] = b[7,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[4,:,:][choice==2]
             vy[choice==3] = b[6,:,:][choice==3]
             vy[choice==4] = b[8,:,:][choice==4]
-            vy[choice==5] = b[8,:,:][choice==5] # post-processed
         elif  h.buffer_format==Formats['FormatsVECTOR_2D_EXTENDED_PEAK']:
             vx = np.zeros(choice.shape, dtype=float)
             vy = np.zeros(choice.shape, dtype=float)
@@ -226,12 +214,10 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[3,:,:][choice==2]
             vx[choice==3] = b[5,:,:][choice==3]
             vx[choice==4] = b[7,:,:][choice==4]
-            vx[choice==5] = b[7,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[4,:,:][choice==2]
             vy[choice==3] = b[6,:,:][choice==3]
             vy[choice==4] = b[8,:,:][choice==4]
-            vy[choice==5] = b[8,:,:][choice==5] # post-processed
             self.peak = b[9,:,:]
         elif h.buffer_format==Formats['FormatsVECTOR_3D']:
             vx = b[0,:,:]
@@ -245,17 +231,14 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[4,:,:][choice==2]
             vx[choice==3] = b[7,:,:][choice==3]
             vx[choice==4] = b[10,:,:][choice==4]
-            vx[choice==5] = b[10,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[5,:,:][choice==2]
             vy[choice==3] = b[8,:,:][choice==3]
             vy[choice==4] = b[11,:,:][choice==4]
-            vy[choice==5] = b[11,:,:][choice==5] # post-processed
             vz[choice==1] = b[3,:,:][choice==1]
             vz[choice==2] = b[6,:,:][choice==2]
             vz[choice==3] = b[9,:,:][choice==3]
             vz[choice==4] = b[12,:,:][choice==4]
-            vz[choice==5] = b[12,:,:][choice==5] # post-processed
             self.peak = b[13,:,:]
         else:
             raise TypeError(u"Object does not have a vector field format.")
@@ -269,7 +252,7 @@ class Buffer(ct.Structure):
         else:
             sl = [slice(None), slice(None,None, -1)]
             vy *= -1
-            vz *= -1
+            #vz *= -1
             
         self.vx = self.scaleI(vx, 1.)[sl]
         self.vy = self.scaleI(vy, 1.)[sl]
@@ -407,28 +390,24 @@ del_attributelist = lambda self: mylib.DestroyAttributeList(ct.byref(ct.pointer(
 
 def save_as_pivmat(filename, buf, att=None):
     """
-    Save single file data according to PIVMAT format
+    Save data according to PIVMAT format
     http://www.fast.u-psud.fr/pivmat/html/pivmat_data.html
     """
-    dic = {'namex':'x','namey':'y','namevx':'vx','namevy':'vy'}
-    for key in ('x','y','z','vx','vy','vz','name', 'setname', 'source'):
+    savedict = {'namex':'x','namey':'y','namevx':'vx','namevy':'vy'}
+    for key in ('x','y','z','vx','vy','vz'):
         try:
-            dic[key] = getattr(buf, key)
-        except AttributeError:
-            dic[key] = buf.__getattr__(key)
-    dic['unitx'] = buf.scaleX.unit.strip('[]')
-    dic['unity'] = buf.scaleY.unit.strip('[]')
-    dic['unitvx'] = buf.scaleI.unit
-    dic['unitvy'] = buf.scaleI.unit
-    dic['choice'] = buf.blocks[0,:,:]
+            savedict[key] = getattr(buf, key)
+        except KeyError:
+            pass
+        key2 = 'unit'+key
+    savedict['unitx'] = buf.scaleX.unit
+    savedict['unity'] = buf.scaleY.unit
+    savedict['unitvx'] = buf.scaleI.unit
+    savedict['unitvy'] = buf.scaleI.unit
+    savedict['choice'] = buf.block[0,:,:]
     vysign = {True:'Y axis downward', False:'Y axis upward'}
-    dic['ysign'] = vysign[buf.scaleY.factor>0]
-    
-    dic['history'] = np.zeros((1,), dtype=np.object)
-    dic['pivmat_version'] = 'unknown'
-    # Still lacks following field: sourcename
-    import scipy.io as io
-    io.savemat(filename, dic)
+    savedict['ysign'] = vysign[buf.scaleY.factor>0]
+    # Still lacks following field: pivmat_version, source, name, sourcename
     
 def show_scalar_field(arr, extent=None, ax=None, colorbar=False):
     import matplotlib.pyplot as plt
@@ -453,8 +432,7 @@ def quiver_3d(x,y,vx,vy,vz, ax=None, sep=1):
     return ax
 
 if __name__=='__main__':
-   #  buf, att = readim7("./test/B00001.VC7")
-    buf, att = readim7("./test/PTV_B00013.VC7")
+    buf, att = readim7("./test/juan.VC7")
     
     def myfilter(buf):
         return buf.blocks[0,:,:]!=5

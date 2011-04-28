@@ -32,16 +32,19 @@ if flags[0]:
     buf1, att1 = im7.readim7('SOV2_01_100_davis.VC7')
     dx = {'extent':(buf1.x[0],buf1.x[-1],buf1.y[0],buf1.y[-1])}
     dx.update(d)
+    # Storage: [index_x, index_y]
+    # Need transpose to fit matplotlib image model.
     if trace:
-        Ax[0].imshow(buf1.vx, **dx)
-        Ax[1].imshow(buf1.vy, **dx)
-        Ax[2].imshow(buf1.vz, **dx)
+        Ax[0].imshow(buf1.vx.T, **dx)
+        Ax[1].imshow(buf1.vy.T, **dx)
+        Ax[2].imshow(buf1.vz.T, **dx)
 
 # txt: comma to dot
 if flags[1]:
     f = file('SOV2_01_100_davis.txt', 'r')
     f.readline(); string = f.read(); f.close(); string = string.replace(',', '.')
     buf2 = np.fromstring(string, sep='\t').reshape((ny,nx,5))
+    # Storage: array[index_y, index_x, index_field]
     x, y = buf2[:,:,0][0,:], buf2[:,:,1][:,0]
     dx = {'extent':(x[0],x[-1],y[0],y[-1])}
     dx.update(d)
@@ -54,6 +57,7 @@ if flags[1]:
 if flags[2]:
     buf3 = np.loadtxt('SOV2_01_100_davis.dat', delimiter=' ', skiprows=3)
     buf3 = buf3.reshape((ny,nx,6))
+    # Storage: array[index_y, index_x, index_field]
     x, y = buf3[:,:,0][0,:], buf3[:,:,1][:,0]
     dx = {'extent':(x[0],x[-1],y[0],y[-1])}
     dx.update(d)
@@ -65,11 +69,12 @@ if flags[2]:
 # mat
 if flags[3]:
     import scipy.io as io
-    buf4 = io.loadmat('SOV2_01_100_pivmat.mat', squeeze_me=True)['v']
-    # Troubles with incorrect x and y vectors...
+    buf4 = io.loadmat('SOV2_01_100_pivmat.mat', struct_as_record=False)['v'][0][0]
+    # Troubles with incorrect x and y vectors... (pb in pivmat save).
     if trace:
         f1.add_subplot(224).imshow(buf4.vx.T[::-1,:], **d)
         f2.add_subplot(224).imshow(-buf4.vy.T[::-1,:], **d)
+        # vz not reliable (first tests on 3D pivmat)
         f3.add_subplot(224).imshow(buf4.vz.T[::-1,:], **d)
 
 if trace:
