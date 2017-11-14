@@ -43,7 +43,7 @@ Formats = {
     'FormatsDOUBLE':-5,   'FormatsFLOAT_VALID':-6, \
     'FormatsIMAGE':0,     'FormatsVECTOR_2D_EXTENDED':1, \
     'FormatsVECTOR_2D':2, 'FormatsVECTOR_2D_EXTENDED_PEAK':3,	\
-	'FormatsVECTOR_3D':4, 'FormatsVECTOR_3D_EXTENDED_PEAK':5,	\
+    'FormatsVECTOR_3D':4, 'FormatsVECTOR_3D_EXTENDED_PEAK':5,	\
     'FormatsCOLOR':-10,   'FormatsRGB_MATRIX':-10, \
     'FormatsRGB_32':-11}
     
@@ -83,6 +83,73 @@ class BufferScale(ct.Structure):
         mylib.SetBufferScale(ct.byref(self), dic["factor"], dic["offset"], \
             ct.c_char_p(dic["description"]), ct.c_char_p(dic["unit"]))
 
+class ImageHeaderX(ct.Structure):
+    _pack_ = 2
+    _fields_ = [ \
+        ("imagetype", ct.c_short),      #0:  (Image_t)
+        ("xstart", ct.c_short),         #2:  start-pos left, not used
+        ("ystart", ct.c_short),         #4:  start-pos top, not used
+        ("extended", ct.c_ubyte*4),      #6:  reserved
+        ("rows", ct.c_short),           #10: total number of rows, if -1 the real number is stored in longRows
+        ("columns", ct.c_short),        #12: total number of columns, if -1 see longColumns
+        ("image_sub_type", ct.c_short), #14: type of image (int):
+                                        #    (included starting from sc_version 4.2 on)
+                                        #    0 = normal image
+                                        #    1 = PIV vector field with header and 4*2D field rows = 9 * y-size
+                                        #    2 = simple 2D vector field (not used yet)	    rows = 2 * y-size
+                                        #    3 ...
+        ("y_dim", ct.c_short),          #16: size of y-dim (size of x-dim is always = columns), not used
+        ("f_dim", ct.c_short),          #18: size of f-dimension (number of frames)
+        #for image_sub_type 1/2 only:
+        ("vector_grid", ct.c_short),    #20: 1-n = vector data: grid size (included starting from sc_ver 4.2 on)
+        ("ext", ct.c_char*11),          #22: reserved
+        ("version", ct.c_ubyte),         #33:  e.g. 120 = 1.2	300+ = 3.xx  40-99 = 4.0 bis 9.9
+        ]
+    if 'win' in sys.platform:
+        _fields_ += [ \
+        ("date", ct.c_char*9),          #34
+        ("time", ct.c_char*9)]          #43
+    else:
+        _fields_ += [ \
+        ("date", ct.c_char*9),          #34
+        ("time", ct.c_char*9)]          #43
+    
+    _fields_ += [ \
+        ("xinit", ct.c_short),          #52:  x-scale values
+        ("xa", ct.c_float),             #54
+        ("xb", ct.c_float),             #58
+        ("xdim", ct.c_char*11),         #62
+        ("xunits", ct.c_char*11),       #73
+        ("yinit", ct.c_short),          #84:  y-scale values
+        ("ya", ct.c_float),             #86
+        ("yb", ct.c_float),             #90
+        ("ydim", ct.c_char*11),         #94
+        ("yunits", ct.c_char*11),       #105
+        ("iinit", ct.c_short),          #116:  intensity-scale values
+        ("ia", ct.c_float),             #118
+        ("ib", ct.c_float),             #122
+        ("idim", ct.c_char*11),         #126
+        ("iunits", ct.c_char*11),       #137
+        ("com1", ct.c_char*40),         #148
+        ("com2", ct.c_char*40),         #188
+        ("longRows", ct.c_int),         #228 (large) number of rows, TL 04.02.2000
+        ("longColumns", ct.c_int),      #232: (large) number of columns, TL 04.02.2000
+        ("longZDim", ct.c_int),         #236: (large) number of z-dimension, TL 02.05.00
+        ("reserved", ct.c_char*12),     #240: reserved
+        ("checksum", ct.c_int)]        #252-255: not used
+    
+    def __repr__(self):
+        tmp = "<%s.%s object at %s>\n" % (
+            self.__class__.__module__,
+            self.__class__.__name__, hex(id(self)))
+        for k,v in self._fields_:
+            if k is "reserved": continue
+            try:
+                tmp += "\t%s:\t%s\n" % (k, getattr(self, k))
+            except:
+                pass
+        return tmp
+        
 class ImageHeader7(ct.Structure):
     _fields_ = [ \
         ("version", ct.c_short), \
@@ -97,6 +164,15 @@ class ImageHeader7(ct.Structure):
         ("vector_grid", ct.c_short),  \
         ("extraFlags", ct.c_short), \
         ("reserved", ct.c_byte*(256-30))]
+    
+    def __repr__(self):
+        tmp = "<%s.%s object at %s>\n" % (
+            self.__class__.__module__,
+            self.__class__.__name__, hex(id(self)))
+        for k,v in self._fields_:
+            if k is "reserved": continue
+            tmp += "\t%s:\t%s\n" % (k, getattr(self, k))
+        return tmp
 
 class _Data(ct.Union):
     _fields_ = [("floatArray", ct.POINTER(ct.c_float)), \
@@ -114,14 +190,33 @@ class Buffer(ct.Structure):
         ("scaleX", BufferScale), \
         ("scaleY", BufferScale), \
         ("scaleI", BufferScale)]
+    
+    def __repr__(self):
+        tmp = "<%s.%s object at %s>\n" % (
+            self.__class__.__module__,
+            self.__class__.__name__, hex(id(self)))
+        for k,v in self._fields_:
+            tmp += "\t%s:\t%s\n" % (k, getattr(self, k))
+        return tmp
 
     def read_header(self):
-        f = file(self.file, 'rb')
-        tmp = f.read(ct.sizeof(ImageHeader7))
-        f.close()
-        self.header = ImageHeader7()
-        ct.memmove(ct.addressof(self.header), ct.c_char_p(tmp), \
-            ct.sizeof(ImageHeader7))
+        try:
+            f = file(self.file, 'rb')
+            tmp = f.read(ct.sizeof(ImageHeader7))
+            f.close()
+            self.header = ImageHeader7()
+            ct.memmove(ct.addressof(self.header), ct.c_char_p(tmp), \
+                ct.sizeof(ImageHeader7))
+            assert self.header.sizeX==self.nx
+            self.reader = "ReadIM7"
+        except AssertionError:
+            f = file(self.file, 'rb')
+            tmp = f.read(ct.sizeof(ImageHeaderX))
+            f.close()
+            self.header = ImageHeaderX()
+            ct.memmove(ct.addressof(self.header), ct.c_char_p(tmp), \
+                ct.sizeof(ImageHeaderX))
+            self.reader = "ReadIMX"
     
     def get_array(self):
         """ 
@@ -162,24 +257,40 @@ class Buffer(ct.Structure):
             raise AttributeError(u"Does not have %s atribute" % key)
     
     def get_positions(self):
-        self.x = self.scaleX(self.header.sizeX, self.vectorGrid)   
-        self.y = self.scaleY(self.header.sizeY, self.vectorGrid)
+        self.x = self.scaleX(self.nx, self.vectorGrid)
+        self.y = self.scaleY(self.ny, self.vectorGrid)
         if self.scaleY.factor<0:
             self.y = self.y[::-1]
-        self.z = 0 #np.arange(self.header.sizeZ)
+        self.z = 0
         
     def get_blocks(self):
         " Transforms the concatenated blocks into arrays."
         h = self.header
-        arr = self.get_array()       
-        if h.buffer_format==Formats['FormatsIMAGE']:
-            self.blocks = arr.reshape((h.sizeZ*h.sizeF, h.sizeY, h.sizeX))
+        arr = self.get_array()
+        if (self.reader is "ReadIMX") \
+          or (h.buffer_format==Formats['FormatsIMAGE']):
+            self.blocks = arr.reshape((self.nf, self.ny, self.nx))
         elif h.buffer_format>=1 and h.buffer_format<=5:
             nblocks = (9, 2, 10, 3, 14)
             nblocks = nblocks[h.buffer_format-1]
-            self.blocks = arr.reshape((nblocks, h.sizeY, h.sizeX))
+            self.blocks = arr.reshape((nblocks, -1, self.nx))
+            self.ny = self.blocks.shape[1]
+            if hasattr(self, 'x'): del self.x
+            if hasattr(self, 'y'): del self.y
         else:
-            raise TypeError(u"Can't get blocks from this buffer format.")
+            self.blocks = arr.reshape((self.nf*self.nz, self.ny, self.nx))
+        #else:
+        #    raise TypeError(u"Can't get blocks from this buffer format.")
+    
+    def get_frame(self, idx=0):
+        """
+        Extract the specified frame (index starting from 0).
+        """
+        if idx<self.nf:
+            b = self.blocks
+            return b[idx,...]
+        else:
+            raise ValueError('Buffer has no more than %d frames.' % self.nf)
     
     def get_components(self):
         """
@@ -202,10 +313,12 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[3,:,:][choice==2]
             vx[choice==3] = b[5,:,:][choice==3]
             vx[choice==4] = b[7,:,:][choice==4]
+            vx[choice==5] = b[7,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[4,:,:][choice==2]
             vy[choice==3] = b[6,:,:][choice==3]
             vy[choice==4] = b[8,:,:][choice==4]
+            vy[choice==5] = b[8,:,:][choice==5] # post-processed
         elif  h.buffer_format==Formats['FormatsVECTOR_2D_EXTENDED_PEAK']:
             vx = np.zeros(choice.shape, dtype=float)
             vy = np.zeros(choice.shape, dtype=float)
@@ -214,10 +327,12 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[3,:,:][choice==2]
             vx[choice==3] = b[5,:,:][choice==3]
             vx[choice==4] = b[7,:,:][choice==4]
+            vx[choice==5] = b[7,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[4,:,:][choice==2]
             vy[choice==3] = b[6,:,:][choice==3]
             vy[choice==4] = b[8,:,:][choice==4]
+            vy[choice==5] = b[8,:,:][choice==5] # post-processed
             self.peak = b[9,:,:]
         elif h.buffer_format==Formats['FormatsVECTOR_3D']:
             vx = b[0,:,:]
@@ -231,14 +346,17 @@ class Buffer(ct.Structure):
             vx[choice==2] = b[4,:,:][choice==2]
             vx[choice==3] = b[7,:,:][choice==3]
             vx[choice==4] = b[10,:,:][choice==4]
+            vx[choice==5] = b[10,:,:][choice==5] # post-processed
             vy[choice==1] = b[2,:,:][choice==1]
             vy[choice==2] = b[5,:,:][choice==2]
             vy[choice==3] = b[8,:,:][choice==3]
             vy[choice==4] = b[11,:,:][choice==4]
+            vy[choice==5] = b[11,:,:][choice==5] # post-processed
             vz[choice==1] = b[3,:,:][choice==1]
             vz[choice==2] = b[6,:,:][choice==2]
             vz[choice==3] = b[9,:,:][choice==3]
             vz[choice==4] = b[12,:,:][choice==4]
+            vz[choice==5] = b[12,:,:][choice==5] # post-processed
             self.peak = b[13,:,:]
         else:
             raise TypeError(u"Object does not have a vector field format.")
@@ -250,6 +368,7 @@ class Buffer(ct.Structure):
         if self.scaleY.factor>0:
             sl = [slice(None), slice(None)]
         else:
+            print "im7: inverting axes y and z."
             sl = [slice(None), slice(None,None, -1)]
             vy *= -1
             #vz *= -1
@@ -283,12 +402,7 @@ class Buffer(ct.Structure):
     
     def quiver_xyplane(self, ax=None, sep=1):
         ax = quiver_3d(self.x, self.y, self.vx, self.vy, self.vz, ax, sep)
-    
-    def delete(self):
-        for key in ('x','y','z','vx','vy','vz','vmag','blocks'):
-            if hasattr(self, key):
-                setattr(self, key,None)
-        del_buffer(self)
+
             
 class AttributeList(ct.Structure):
     def __getattr__(self, key):
@@ -379,10 +493,18 @@ def readim7(filename, scale_warn= False):
             setattr(tmp,'unit', vals[1])
             setattr(tmp,'description', vals[2])
             
+    mybuffer.get_blocks()
     from_att('scaleX')
     from_att('scaleX')
     from_att('scaleY')
     from_att('scaleI')
+    if mybuffer.reader is 'ReadIMX':
+        h = mybuffer.header
+        mybuffer.scaleX = BufferScale(description=h.xdim, unit=h.xunits, 
+            factor=h.xa, offset=h.xb)
+        mybuffer.scaleY = BufferScale(description=h.ydim, unit=h.yunits, 
+            factor=h.ya, offset=h.yb)
+        
     return mybuffer, att
 
 del_buffer = lambda self: mylib.DestroyBuffer(ct.byref(self))
@@ -390,24 +512,28 @@ del_attributelist = lambda self: mylib.DestroyAttributeList(ct.byref(ct.pointer(
 
 def save_as_pivmat(filename, buf, att=None):
     """
-    Save data according to PIVMAT format
+    Save single file data according to PIVMAT format
     http://www.fast.u-psud.fr/pivmat/html/pivmat_data.html
     """
-    savedict = {'namex':'x','namey':'y','namevx':'vx','namevy':'vy'}
-    for key in ('x','y','z','vx','vy','vz'):
+    dic = {'namex':'x','namey':'y','namevx':'vx','namevy':'vy'}
+    for key in ('x','y','z','vx','vy','vz','name', 'setname', 'source'):
         try:
-            savedict[key] = getattr(buf, key)
-        except KeyError:
-            pass
-        key2 = 'unit'+key
-    savedict['unitx'] = buf.scaleX.unit
-    savedict['unity'] = buf.scaleY.unit
-    savedict['unitvx'] = buf.scaleI.unit
-    savedict['unitvy'] = buf.scaleI.unit
-    savedict['choice'] = buf.block[0,:,:]
+            dic[key] = getattr(buf, key)
+        except AttributeError:
+            dic[key] = buf.__getattr__(key)
+    dic['unitx'] = buf.scaleX.unit.strip('[]')
+    dic['unity'] = buf.scaleY.unit.strip('[]')
+    dic['unitvx'] = buf.scaleI.unit
+    dic['unitvy'] = buf.scaleI.unit
+    dic['choice'] = buf.blocks[0,:,:]
     vysign = {True:'Y axis downward', False:'Y axis upward'}
-    savedict['ysign'] = vysign[buf.scaleY.factor>0]
-    # Still lacks following field: pivmat_version, source, name, sourcename
+    dic['ysign'] = vysign[buf.scaleY.factor>0]
+    
+    dic['history'] = np.zeros((1,), dtype=np.object)
+    dic['pivmat_version'] = 'unknown'
+    # Still lacks following field: sourcename
+    import scipy.io as io
+    io.savemat(filename, dic)
     
 def show_scalar_field(arr, extent=None, ax=None, colorbar=False):
     import matplotlib.pyplot as plt
@@ -432,7 +558,7 @@ def quiver_3d(x,y,vx,vy,vz, ax=None, sep=1):
     return ax
 
 if __name__=='__main__':
-    buf, att = readim7("./test/juan.VC7")
+    buf, att = readim7("./test/B00001.VC7")
     
     def myfilter(buf):
         return buf.blocks[0,:,:]!=5

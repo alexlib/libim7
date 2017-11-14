@@ -7,7 +7,7 @@
 """
 
 import sys
-sys.path.append('..')
+sys.path.append('../libim7/')
 import numpy as np
 trace = True
 flags = [True, True, True, True]
@@ -32,24 +32,24 @@ if flags[0]:
     buf1, att1 = im7.readim7('SOV2_01_100_davis.VC7')
     dx = {'extent':(buf1.x[0],buf1.x[-1],buf1.y[0],buf1.y[-1])}
     dx.update(d)
-    # Storage: [index_x, index_y]
-    # Need transpose to fit matplotlib image model.
     if trace:
         Ax[0].imshow(buf1.vx.T, **dx)
         Ax[1].imshow(buf1.vy.T, **dx)
         Ax[2].imshow(buf1.vz.T, **dx)
+        Ax[0].text(.02, .02, 'VC7', transform=Ax[0].transAxes)
 
 # txt: comma to dot
 if flags[1]:
     f = file('SOV2_01_100_davis.txt', 'r')
     f.readline(); string = f.read(); f.close(); string = string.replace(',', '.')
     buf2 = np.fromstring(string, sep='\t').reshape((ny,nx,5))
-    # Storage: array[index_y, index_x, index_field]
     x, y = buf2[:,:,0][0,:], buf2[:,:,1][:,0]
     dx = {'extent':(x[0],x[-1],y[0],y[-1])}
     dx.update(d)
     if trace:
-        f1.add_subplot(222, **share(1)).imshow(buf2[:,:,2], **dx)
+        ax=f1.add_subplot(222, **share(1))
+        ax.imshow(buf2[:,:,2], **dx)
+        ax.text(.02, .02, 'txt', transform=ax.transAxes)
         f2.add_subplot(222, **share(2)).imshow(buf2[:,:,3], **dx)
         f3.add_subplot(222, **share(3)).imshow(buf2[:,:,4], **dx)
 
@@ -57,25 +57,32 @@ if flags[1]:
 if flags[2]:
     buf3 = np.loadtxt('SOV2_01_100_davis.dat', delimiter=' ', skiprows=3)
     buf3 = buf3.reshape((ny,nx,6))
-    # Storage: array[index_y, index_x, index_field]
     x, y = buf3[:,:,0][0,:], buf3[:,:,1][:,0]
     dx = {'extent':(x[0],x[-1],y[0],y[-1])}
     dx.update(d)
     if trace:
-        f1.add_subplot(223, **share(1)).imshow(buf3[:,:,3], **dx)
+        f1.add_subplot(223, **share(1))
+        ax.imshow(buf3[:,:,3], **dx)
+        ax.text(.02, .02, 'dat', transform=ax.transAxes)
         f2.add_subplot(223, **share(2)).imshow(buf3[:,:,4], **dx)
         f3.add_subplot(223, **share(3)).imshow(buf3[:,:,5], **dx)
     
 # mat
 if flags[3]:
     import scipy.io as io
-    buf4 = io.loadmat('SOV2_01_100_pivmat.mat', struct_as_record=False)['v'][0][0]
-    # Troubles with incorrect x and y vectors... (pb in pivmat save).
+    buf4 = io.loadmat('SOV2_01_100_pivmat.mat', matlab_compatible=True)['v']
+    # Troubles with incorrect x and y vectors...
     if trace:
-        f1.add_subplot(224).imshow(buf4.vx.T[::-1,:], **d)
-        f2.add_subplot(224).imshow(-buf4.vy.T[::-1,:], **d)
-        # vz not reliable (first tests on 3D pivmat)
-        f3.add_subplot(224).imshow(buf4.vz.T[::-1,:], **d)
+        f1.add_subplot(224)
+        ax.imshow(buf4['vx'][0,0].T[::-1,:], **d)
+        ax.text(.02, .02, 'mat', transform=ax.transAxes)
+        f2.add_subplot(224).imshow(-buf4['vy'][0,0].T[::-1,:], **d)
+        f3.add_subplot(224).imshow(buf4['vz'][0,0].T[::-1,:], **d)
 
 if trace:
+    for ind,fig in enumerate((f1,f2,f3)):
+        lAx = fig.get_axes()
+#        for ax in lAx[1:]:
+#            ax.get_images()[0].set_clim(lAx[0].get_images()[0].get_clim())
+        plt.savefig(__file__.replace('.py', '%d.pdf' % ind))
     plt.show()
